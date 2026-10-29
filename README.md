@@ -27,7 +27,7 @@ SMS can't handle replies. A call can: "Friday ko dunga", "abhi paise nahi hain",
 - Demo calls go only to my own or teammates' phones.
 ## Tech stack
  
-| Part | Choice |
+| Part || Choice ||
 |---|---|
 | Database | Postgres (Supabase or plain Postgres) |
 | Backend | Python FastAPI |
