@@ -1,5 +1,7 @@
 idea.md
 .env
 venv/
+.venv/
 __pycache__/
 *.pyc
+frontend/node_modules/
