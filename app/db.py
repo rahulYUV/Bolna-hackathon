@@ -39,6 +39,22 @@ def get_customer(customer_id: int):
         return cur.fetchone()
 
 
+def list_calls():
+    """Lists recorded calls with their customer details for the dashboard."""
+    with get_cursor() as cur:
+        cur.execute(
+            """
+            SELECT calls.id, calls.customer_id, customers.name AS customer_name,
+                   customers.phone, calls.called_at, calls.outcome,
+                   calls.promise_date, calls.notes, calls.transcript
+            FROM calls
+            JOIN customers ON customers.id = calls.customer_id
+            ORDER BY calls.called_at DESC, calls.id DESC
+            """
+        )
+        return cur.fetchall()
+
+
 # --- Group & Expense Functions for Hisaab ---
 
 def create_group(name: str):
