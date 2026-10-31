@@ -31,13 +31,48 @@
 - Khatabook and OkCredit already send reminders, mostly via SMS and WhatsApp. So I need to show why a voice call is **better**, not just different.
 - A call might feel worse than a message. Some customers may find an automated call from the shop impersonal or insulting, which is the exact relationship damage the shopkeeper is trying to avoid.
 
-## How I'm validating this
+## Current MVP validation
 
-I asked 3 to 5 shopkeepers:
+For the current MVP, we are focusing on one simple neighborhood kirana shop and using one shopkeeper's workflow as the initial source of truth. This is an early validation, not yet proof that the problem is the same for all kirana stores.
+
+### Initial shop profile
+
+- **Shop type:** Neighborhood kirana/general store
+- **Location:** To be recorded
+- **Current record-keeping:** Informal khata/notebook
+- **Pending udhaar:** To be recorded by the shopkeeper
+- **Current reminder method:** Personal follow-up by the shopkeeper
+- **Preferred language:** Hindi/Hinglish, to be confirmed
+- **Preferred calling time:** To be confirmed with the shopkeeper
+
+### What has been validated so far
+
+- The shopkeeper has a real need to follow up with customers about pending udhaar.
+- The shopkeeper is willing to try a voice-based reminder sent on behalf of the shop.
+- We have successfully triggered a call to a customer through the voice-agent workflow.
+- The MVP currently focuses on a simple shopkeeper flow rather than supporting every possible shop type or payment process.
+
+### What is still unknown
+
+We have not yet collected enough evidence to generalize this solution. We still need to record:
+
+- The shopkeeper's approximate total pending udhaar
+- Exact shopkeeper/customer quotes
+- Whether customers prefer calls over WhatsApp or SMS
+- Whether automated calls feel respectful to customers
+- Which languages and calling times work best
+- What would make the shopkeeper stop using the product
+- Whether the call results in a repayment promise or actual payment
+
+These questions should be answered through additional shopkeeper and customer conversations after the initial working demo.
+
+## Initial interview questions
+
+We asked, or will ask, the shopkeeper:
 
 1. "How much udhaar is pending right now, and how long do you think you'll have to wait for it?"
 2. "How do you remind people today? What happens when you do?"
 3. "What do you hate most about it?"
 4. "Would you be okay with a call going out in your shop's name?"
 
-**Their answers:** *(add them here, with names or shop types and direct quotes)*
+**Their answers:** *(add verified answers and direct quotes here; do not invent quotes)*

@@ -1,119 +1,193 @@
-# Hisaab: 
- 
-Built for the Bolna Buildathon (Bolna is YC F25)
- 
- Hisaab is a voice agent that politely calls kirana customers in Hindi/Hinglish to collect udhaar, logs their promises, and follows up until the shopkeeper marks it paid.
+# Hisaab
 
-## How to run
+Hisaab helps a kirana shopkeeper track customer credit and follow up politely by voice. The dashboard manages customers, balances, payments, call outcomes, and follow-ups. Outbound calls are placed through a configured Bolna voice agent; the app stores the resulting call details and presents them to the shopkeeper.
 
-### 1. Set up Python
+## What works in this repository
 
-Python 3.10 or newer is recommended. From the project root, create and activate a virtual environment:
+- FastAPI backend with PostgreSQL persistence.
+- React, TypeScript, and Vite dashboard, served as static assets by FastAPI after a production build.
+- Shopkeeper-only dashboard access using Supabase phone OTP or a local-only demo login.
+- Customer creation and editing, Indian phone normalization, payment recording, paid/unpaid state, and do-not-call controls.
+- Outbound Bolna call triggering with calling-hour, attempt, cooldown, and duplicate-request safeguards.
+- Authenticated and deduplicated Bolna call-ended webhook handling.
+- Call history with summary, transcript, duration, timestamps, status, phone details, and authenticated recording playback when Bolna supplies those fields.
+- On-demand execution lookup from Bolna when call details need refreshing.
+- Daily retention cleanup for app-stored call artifacts and the temporary redacted payload snapshots.
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
+Automatic follow-up calling, a retry scheduler, and deployment configuration are not implemented. Promise dates are recorded and shown in the dashboard; they do not trigger a future call automatically.
+
+## Architecture
+
+```text
+frontend/ (React + TypeScript + Vite)
+          | Supabase OTP, authenticated API requests
+          v
+FastAPI (app/main.py) ---- PostgreSQL/Supabase DB (app/db.py, schema.sql)
+          |                         ^
+          | Bolna call trigger      | Bolna call-ended webhook
+          v                         |
+      Bolna Voice Agent ------------+
 ```
 
-On macOS or Linux, activate it with `source .venv/bin/activate` instead.
+`app/sarvam.py` contains a Sarvam client and transcript outcome-extraction helper, with a standalone example in `sarvam_test.py`. The active call and webhook routes currently use the configured Bolna agent and accept structured `extracted_data` from Bolna; they do not invoke the Sarvam helper. Configure Sarvam in the Bolna agent itself if that agent uses Sarvam for speech processing.
 
-Install the project dependencies:
+## Repository map
 
-```bash
-pip install -r requirements.txt
-```
+| Path | Purpose |
+|---|---|
+| `app/main.py` | FastAPI routes, authentication, call/webhook flow, recording proxy, retention task |
+| `app/db.py` | PostgreSQL queries and schema compatibility helpers |
+| `app/reliability.py` | Strict extraction schema, promise validation, status transitions |
+| `app/sarvam.py` | Optional Sarvam transcript helper; not part of active webhook processing |
+| `frontend/src/` | Dashboard source code |
+| `app/static/` | Production frontend output served by FastAPI |
+| `schema.sql` | Initial database schema for a fresh database |
+| `tests/` | Backend unit and route tests; database/provider calls are mocked where applicable |
+| `fetch_execution.py` | Fetches a Bolna execution and writes a redacted local JSON snapshot |
+| `docs/` | Reliability, API/dashboard behavior, and implementation audit notes |
 
-### 2. Configure environment variables
+## Requirements
 
-Create a `.env` file in the project root (keep it private) and set:
+- Python 3.11 or newer.
+- Node.js and npm (for frontend development/build).
+- PostgreSQL. Supabase Postgres is supported using its connection string.
+- Bolna credentials to place real calls.
+- Supabase Auth credentials for real phone OTP login, unless using local demo mode.
+
+## Local setup
+
+### 1. Create the database
+
+Create a PostgreSQL database, then run [`schema.sql`](./schema.sql) against it. The application also has compatibility helpers for selected columns, but a fresh database should be initialized from the checked-in schema.
+
+### 2. Configure the backend
+
+Copy `.env.example` to `.env` and fill the values required for your environment. Keep `.env` private and never put provider secrets in `VITE_` variables.
+
+Minimum backend settings:
 
 ```dotenv
 DATABASE_URL=postgresql://USER:PASSWORD@HOST:5432/DATABASE
 BOLNA_API_KEY=your_bolna_api_key
 BOLNA_AGENT_ID=your_bolna_agent_id
-SARVAM_API_KEY=your_sarvam_api_key
+SHOPKEEPER_PHONE=+91XXXXXXXXXX
 ```
 
-`DATABASE_URL` is required when the application starts. Bolna credentials are required to trigger calls. The current call-ended webhook stores the transcript and outcome sent by Bolna; Sarvam extraction is available as a separate module and is not yet wired into that webhook.
+For real Supabase authentication, also set `SUPABASE_URL` and `SUPABASE_ANON_KEY`. For local-only demo authentication, set `DEMO_AUTH_BYPASS=true`; the bypass accepts requests only from the same machine and requires the configured shopkeeper phone. Do not enable this mode on a public deployment.
 
-The database must be reachable and have the tables expected by the app, including `customers` and `calls`. This repository does not currently include a schema or migration script.
+Other settings and defaults are listed with comments in [`.env.example`](./.env.example), including calling hours, attempt limits, webhook validation, cooldown, and 30-day retention.
 
-### 3. Start the API
+Install dependencies and run the API from the project root:
 
-From the project root, run:
-
-```bash
+```powershell
+py -3.11 -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-The API will be available at <http://127.0.0.1:8000>. Check `GET /health` for API and database connectivity, and open <http://127.0.0.1:8000/docs> to inspect and try the endpoints.
+The API is at <http://127.0.0.1:8000>. `GET /health` checks API/database availability, and <http://127.0.0.1:8000/docs> shows the OpenAPI interface.
 
-To trigger a demo call, use `POST /calls/trigger` with a customer ID that exists in the database:
+### 3. Configure and run the dashboard
+
+For real Supabase OTP, set the same public project URL and anon/publishable key for both backend and frontend:
+
+```dotenv
+SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLIC_ANON_KEY
+VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
+VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_PUBLIC_ANON_KEY
+```
+
+Enable phone sign-in and configure an SMS provider in Supabase Auth. The app only allows the configured `SHOPKEEPER_PHONE`. Never put a Supabase service-role key in the frontend.
+
+To run the frontend with Vite during development, open a second terminal:
+
+```powershell
+cd frontend
+npm install
+npm run dev
+```
+
+Vite runs at <http://127.0.0.1:5173>; keep FastAPI running at port 8000. To serve the dashboard from FastAPI, build it after setting `VITE_` values:
+
+```powershell
+cd frontend
+npm run build
+```
+
+Then open <http://127.0.0.1:8000/>. Restart FastAPI after backend `.env` changes; restart Vite or rebuild after frontend environment changes.
+
+### Local demo login
+
+With `DEMO_AUTH_BYPASS=true`, the local demo accepts a six-digit code for the configured owner phone and creates an in-memory session. It only works from loopback. Sessions disappear when the API process restarts. Use real Supabase OTP for deployment.
+
+## Main API routes
+
+The interactive API reference at `/docs` is the source of truth for request/response schemas. Protected routes require the shopkeeper session.
+
+| Method and path | Purpose |
+|---|---|
+| `GET /health` | API/database health |
+| `GET /auth/demo-mode` | Reports whether local demo authentication is enabled |
+| `POST /auth/check-shopkeeper-phone` | Validates the configured owner phone before OTP request |
+| `POST /auth/demo-login` | Local loopback-only demo login |
+| `GET /auth/session` | Current shopkeeper session |
+| `GET /customers`, `POST /customers` | List and create customers |
+| `GET /customers/{id}`, `PATCH /customers/{id}` | Read and update a customer |
+| `POST /customers/{id}/mark-paid`, `POST /customers/{id}/mark-unpaid` | Change paid state |
+| `POST /customers/{id}/payment`, `POST /customers/{id}/payments` | Record a payment |
+| `POST /customers/{id}/do-not-call`, `POST /customers/{id}/allow-calls` | Manage call opt-out |
+| `GET /dashboard/summary`, `GET /dashboard/followups` | Dashboard KPIs and prioritized follow-ups |
+| `GET /shop-profile` | Configured single-shop profile |
+| `GET /calls`, `POST /calls/trigger` | Call history and outbound call trigger |
+| `POST /calls/{id}/sync`, `GET /calls/{id}/recording` | Refresh call data and stream recording |
+| `POST /webhook/call-ended` | Bolna execution event callback |
+
+Example call trigger:
 
 ```json
 {"customer_id": 1}
 ```
 
-Only trigger calls to yourself or teammates during a demo.
- 
-## The problem
- 
-The real problem isn't record-keeping. It's getting paid without damaging the relationship.
- 
-- **Money is stuck.** Thin margins, little working capital. Every unpaid Rs 500 is cash the shop can't use to restock.
-- **Customers are neighbors.** Asking "paisa kab doge?" feels rude, so many shopkeepers avoid asking and the amount grows.
-- **Udhaar is how they compete.** They can't stop giving credit, so they need a way to collect without confrontation.
-- **Follow-up is inconsistent.** Reminders happen randomly, when the shopkeeper remembers.
-## Why voice (vs SMS/WhatsApp from Khatabook, OkCredit)
- 
-SMS can't handle replies. A call can: "Friday ko dunga", "abhi paise nahi hain", "amount galat hai". The reply becomes structured data and the agent follows up on the promised date.
- 
+The response includes the Bolna execution ID when the provider accepts the call. Place demo calls only to numbers whose owners have agreed to receive them.
 
- 
-## Agent rules
- 
-- Never invent amounts. Use only the confirmed ledger value passed in as a variable.
-- Polite, non-threatening tone. No pressure, no late-night calls.
-- Keep replies to one or two sentences to reduce latency.
-- Escalate disputes instead of arguing.
-- Demo calls go only to my own or teammates' phones.
-## Tech stack
- 
-| Part || Choice ||
-|---|---|
-| Database | Postgres (Supabase or plain Postgres) |
-| Backend | Python FastAPI |
-| Voice agent | Bolna (Hindi/Hinglish) |
-| Outcome extraction | LLM (Claude API) |
-| Scheduler | APScheduler (recalls, daily summary) |
-| Dashboard | Streamlit |
-| Daily summary | Telegram bot |
-| Hosting | Render/Railway, ngrok in development |
- 
-**Tables:** `customers` (id, name, phone, amount_due, status, promise_date), `calls` (id, customer_id, called_at, transcript, outcome, promise_date, notes)
- 
-**Endpoints:** `POST /calls/trigger`, `POST /webhook/call-ended`, `POST /customers/{id}/mark-paid`, `GET /summary/today`
- 
-Check Bolna's docs for the exact call-trigger request and webhook payload before writing the client.
+## Call details and provider behavior
 
-## Shopkeeper dashboard
+The webhook and on-demand sync read the Bolna execution fields `summary`, `transcript`, `conversation_duration`, `created_at`/`initiated_at`, `agent_number`, and `telephony_data.recording_url`, plus Bolna `extracted_data` for the validated outcome. The transcript is displayed with Bolna's speaker labels. Recording playback goes through the authenticated backend proxy; the provider URL is not returned to the dashboard.
 
-Start the FastAPI app as above and open <http://127.0.0.1:8000/>. The dashboard is served by the API and reads the complete customer list from `GET /customers`, recorded calls from `GET /calls`, and connection state from `GET /health`. Use the customer table to search and filter balances; **Call gently** asks for confirmation before sending `POST /calls/trigger` with that customer's ID. A call appears in recent activity after Bolna sends the call-ended webhook.
+Bolna delivery to a local machine requires a publicly reachable webhook URL. If that is unavailable, the dashboard's **Refresh details** action uses the stored Bolna execution ID to retrieve the completed execution. This requires `BOLNA_API_KEY` and an execution still available from Bolna.
 
-`GET /calls` returns recorded call fields (`id`, `customer_id`, `customer_name`, `phone`, `called_at`, `outcome`, `promise_date`, `notes`, and `transcript`) newest first. It uses the `calls` and `customers` tables described above.
+## Tests and checks
 
-The React + TypeScript source is in `frontend/`. Run `npm install` and `npm run dev` there to develop with Vite at <http://127.0.0.1:5173/> (keep FastAPI running at port 8000). Run `npm run build` to compile the frontend into `app/static`, which FastAPI serves at <http://127.0.0.1:8000/>.
+From `frontend/`:
 
-### Shopkeeper-only Supabase login
+```powershell
+npm run typecheck
+npm run build
+```
 
-The demo home page allows one shopkeeper to sign in. Public signup and customer login are disabled for this demo. With `DEMO_AUTH_BYPASS=true`, the local demo accepts any six-digit entry for the configured owner phone and issues an in-memory 8-hour session. The bypass endpoint only accepts requests from the same computer (`localhost`/loopback); protected customer and call routes still require that issued session and the configured `SHOPKEEPER_PHONE`.
+From the project root, with the Python dependencies installed:
 
-To use real Supabase OTP instead, set `DEMO_AUTH_BYPASS=false`. The frontend requests and verifies OTPs with Supabase Auth; FastAPI validates the Supabase session and restricts protected routes to the configured owner phone.
+```powershell
+python -m unittest discover -s tests -v
+```
 
-1. Copy `.env.example` to `.env` and fill in `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SHOPKEEPER_PHONE`, `VITE_SUPABASE_URL`, and `VITE_SUPABASE_ANON_KEY`. Use the Supabase **public anon/publishable key** in the frontend; never use a service-role key there. Use the same project URL and public key for the backend and frontend.
-2. In Supabase Authentication, enable Phone sign-in, allow phone signups, and configure an SMS provider. With real OTP enabled, the first OTP request creates the owner Auth user only after FastAPI confirms the number matches `SHOPKEEPER_PHONE`; any other number is rejected before Supabase is called. The number must match in international format (for example, `+91...`).
-3. For a no-SMS demo, configure a Supabase test phone number and fixed OTP for that owner. Supabase still requires an SMS provider to be configured, but does not send a message for a test phone. Treat the fixed code as demo-only.
-4. Restart FastAPI and Vite after editing `.env`; Vite embeds its `VITE_` settings at build time. Then run `npm run build` for the FastAPI-served version.
+The checked-in backend tests cover validation, auth boundaries, and selected route behavior with mocks. They do not verify a live Supabase database, Bolna API, Sarvam API, or real phone call. Use a dedicated test database and provider test setup before performing manual integration testing.
 
-`GET /health`, `GET /auth/demo-mode`, and `POST /auth/check-shopkeeper-phone` are public; the phone-check endpoint only accepts the configured owner number. `POST /auth/demo-login` is available only with `DEMO_AUTH_BYPASS=true` and from localhost. `GET /auth/session`, `GET /customers`, `GET /customers/{id}`, `GET /calls`, and `POST /calls/trigger` require a valid owner session.
- 
+## Data handling and safety
+
+- Use `BOLNA_WEBHOOK_SECRET` for local webhook testing, or the configured Bolna source IP allowlist for production webhook access. See [docs/reliability.md](./docs/reliability.md).
+- Call attempts are limited by calling hours, `MAX_CALL_ATTEMPTS`, customer opt-out, and `CALL_TRIGGER_COOLDOWN_MINUTES`.
+- Store timestamps in UTC; promise dates are interpreted as India calendar dates.
+- `CUSTOMER_DATA_RETENTION_DAYS` defaults to 30. The app removes expired call rows and related call audit/webhook records, and expires local redacted payload snapshots. The cleanup loop runs while the API process is running; Bolna-hosted recordings follow Bolna's retention policy.
+- Keep phone numbers, transcripts, API keys, and webhook secrets private. Temporary local payload snapshots are redacted before writing and ignored by Git.
+
+## Current limits
+
+- No automatic future call scheduler or retry queue; follow-up dates are stored for the shopkeeper.
+- Runtime webhook processing uses Bolna's structured `extracted_data`; the separate Sarvam extraction utility is not called by the route.
+- No payment gateway/UPI integration, Telegram alerts, or deployment manifests are included.
+- The configured Bolna agent prompt and its internal speech-provider configuration are managed in Bolna, outside this repository.
+
+For reliability details and a claim-by-claim implementation audit, see [docs/reliability.md](./docs/reliability.md) and [docs/audit.md](./docs/audit.md). Dashboard metric definitions are in [docs/dashboard-metrics.md](./docs/dashboard-metrics.md).
