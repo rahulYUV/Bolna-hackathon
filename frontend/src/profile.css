@@ -1,0 +1,45 @@
+.profile-strip {
+  display: flex;
+  justify-content: space-between;
+  gap: 32px;
+  align-items: flex-end;
+  padding: 28px 32px;
+  margin: 0 0 48px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+}
+
+.profile-strip h2 {
+  margin: 8px 0 4px;
+}
+
+.profile-details {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 24px;
+  min-width: 55%;
+}
+
+.profile-details span {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+}
+
+.profile-details b {
+  color: var(--ink);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 800px) {
+  .profile-strip {
+    display: grid;
+  }
+
+  .profile-details {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
