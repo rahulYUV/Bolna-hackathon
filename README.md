@@ -19,7 +19,8 @@
   <a href="#product-preview">🖼️ Product preview</a> ·
   <a href="#the-product">✨ How it works</a> ·
   <a href="#run-locally">🚀 Run locally</a> ·
-  <a href="#api-overview">🔌 API</a>
+  <a href="#api-overview">🔌 API</a> ·
+  <a href="https://drive.google.com/file/d/1cKJOk83xUsOMQLYC4gaRGLVy_ylUxr5Y/view?usp=sharing">🎬 Product demo</a>
 </p>
 
 ---
